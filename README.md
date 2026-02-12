@@ -13,7 +13,7 @@ A beautiful terminal user interface for installing NVIDIA proprietary drivers on
 - Support for both RPM and DEB-based distributions
 
 ### User Interface
-- Beautiful TUI with Unicode box-drawing characters (╭╮╰╯│─)
+- TUI with Unicode box-drawing characters (╭╮╰╯│─)
 - Color-coded status messages:
   - Green (✓) for success
   - Yellow (⚠) for warnings
@@ -58,7 +58,7 @@ The installer automatically detects and handles:
 ## Installation
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/iamteedoh/nvidiaInstaller.git
 cd nvidiaInstaller
 chmod +x nvidia-installer.sh
 ```
@@ -94,7 +94,7 @@ In auto mode:
 - If drivers are already installed, installation is **skipped** (displays message with current version)
 - Use `--force` to reinstall even when drivers exist
 - If Secure Boot is enabled, a warning is displayed but installation proceeds
-- After installation, system reboots automatically after 5 seconds (use `--no-reboot` to skip)
+- After installation, prompts for reboot confirmation (use `--reboot` for automatic reboot, `--no-reboot` to skip)
 
 **Auto mode output example:**
 ```
@@ -124,8 +124,9 @@ Installing:
 
 | Option | Description |
 |--------|-------------|
-| `-y`, `--auto`, `--yes` | Run in automatic mode, accepting all defaults |
+| `-y`, `--auto`, `--yes` | Run in automatic mode (still prompts for reboot confirmation) |
 | `-f`, `--force` | Force reinstall even if drivers are already installed |
+| `--reboot` | Automatically reboot without confirmation (use with `-y` for fully unattended) |
 | `--no-reboot` | Do not reboot after installation |
 | `-h`, `--help` | Show help message and exit |
 
@@ -135,8 +136,11 @@ Installing:
 # Interactive TUI mode
 sudo ./nvidia-installer.sh
 
-# Automatic installation (skips if already installed)
+# Automatic installation (prompts for reboot)
 sudo ./nvidia-installer.sh -y
+
+# Fully unattended with automatic reboot
+sudo ./nvidia-installer.sh -y --reboot
 
 # Force reinstall automatically
 sudo ./nvidia-installer.sh -y -f

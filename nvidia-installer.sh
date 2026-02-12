@@ -46,6 +46,7 @@ TERM_HEIGHT=24
 AUTO_MODE=false
 FORCE_REINSTALL=false
 NO_REBOOT=false
+AUTO_REBOOT=false
 EXIT_CLEAN=false
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,17 +61,19 @@ Usage: nvidia-installer.sh [OPTIONS]
 
 Options:
   -y, --auto          Run in automatic mode, accepting all defaults
-                      (non-interactive, skips all prompts)
+                      (still prompts for reboot confirmation)
   -f, --force         Force reinstall even if drivers are already installed
-                      (implies --auto behavior for reinstall prompt)
-  --no-reboot         Do not prompt for reboot after installation
+  --reboot            Automatically reboot without confirmation after install
+                      (use with -y for fully unattended installation)
+  --no-reboot         Do not reboot after installation
   -h, --help          Show this help message and exit
 
 Examples:
   sudo ./nvidia-installer.sh              # Interactive mode
-  sudo ./nvidia-installer.sh -y           # Automatic installation
+  sudo ./nvidia-installer.sh -y           # Auto install, prompts for reboot
+  sudo ./nvidia-installer.sh -y --reboot  # Fully unattended with auto reboot
   sudo ./nvidia-installer.sh -y -f        # Force reinstall automatically
-  sudo ./nvidia-installer.sh -y --no-reboot  # Auto install, no reboot prompt
+  sudo ./nvidia-installer.sh -y --no-reboot  # Auto install, no reboot
 
 EOF
     exit 0
@@ -85,6 +88,10 @@ parse_args() {
                 ;;
             -f|--force)
                 FORCE_REINSTALL=true
+                shift
+                ;;
+            --reboot)
+                AUTO_REBOOT=true
                 shift
                 ;;
             --no-reboot)
@@ -1337,12 +1344,23 @@ show_completion_screen() {
         echo ""
 
         # Handle reboot in auto mode
-        if [[ "$NO_REBOOT" != true ]]; then
-            echo -e "${YELLOW}Rebooting in 5 seconds...${NC} (use --no-reboot to skip)"
+        if [[ "$NO_REBOOT" == true ]]; then
+            echo -e "${DIM}Reboot skipped (--no-reboot flag set)${NC}"
+        elif [[ "$AUTO_REBOOT" == true ]]; then
+            echo -e "${YELLOW}Rebooting in 5 seconds...${NC}"
             sleep 5
             reboot
         else
-            echo -e "${DIM}Reboot skipped (--no-reboot flag set)${NC}"
+            # Auto mode but no --reboot flag: prompt for confirmation
+            echo -e -n "Would you like to reboot now? [y/N]: "
+            read -r response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}Rebooting in 3 seconds...${NC}"
+                sleep 3
+                reboot
+            else
+                echo -e "${DIM}Reboot skipped. Please reboot manually.${NC}"
+            fi
         fi
         return 0
     fi

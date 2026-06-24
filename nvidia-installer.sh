@@ -33,7 +33,8 @@ DISTRO_VERSION=""
 PACKAGE_MANAGER=""
 GPU_DETECTED=""
 GPU_NAME=""
-GPU_IS_LEGACY=false
+NVIDIA_STREAM="current"    # driver stream to install: current | 580xx | 470xx
+NVIDIA_580XX_AVAILABLE=""  # 580xx availability check result: true | false (empty = unchecked)
 SECURE_BOOT_ENABLED=false
 LUKS_DETECTED=false
 DRIVER_INSTALLED=false
@@ -467,11 +468,22 @@ detect_nvidia_gpu() {
         GPU_DETECTED=true
         GPU_NAME=$(echo "$gpu_info" | head -1 | sed 's/.*: //' | cut -d'[' -f1 | xargs)
 
-        # Check for legacy Kepler GPUs (600/700 series)
+        # Determine the correct driver stream from the GPU architecture:
+        #   470xx legacy = Kepler (GK1xx)                       — GeForce 600/700 series
+        #   580xx legacy = Maxwell (GM1xx/GM2xx), Pascal (GP1xx), Volta (GV1xx)
+        #   current      = Turing and newer                     — akmod-nvidia
+        # The chip codename that `lspci -nn` prints before the marketing name
+        # (e.g. "GP107GL [Quadro P1000]") is the reliable signal — far more so
+        # than product names. Evaluate oldest-first so a Kepler card never falls
+        # through into the Maxwell/Pascal/Volta rule. Turing codenames are TU1xx
+        # and Ampere/Ada/Hopper/Blackwell are GA/AD/GH/GB, so none match g[mpv].
         local lower_gpu
         lower_gpu=$(echo "$gpu_info" | tr '[:upper:]' '[:lower:]')
-        if [[ "$lower_gpu" =~ kepler|gk[0-9]|gt\ ?6[0-9][0-9]|gt\ ?7[0-9][0-9]|gtx\ ?6[0-9][0-9]|gtx\ ?7[0-9][0-9] ]]; then
-            GPU_IS_LEGACY=true
+        if [[ "$lower_gpu" =~ kepler|gk[0-9] ]] || \
+           [[ "$lower_gpu" =~ (gt|gtx)\ ?[67][0-9][0-9] ]]; then
+            NVIDIA_STREAM="470xx"
+        elif [[ "$lower_gpu" =~ maxwell|pascal|volta|g[mpv][0-9] ]]; then
+            NVIDIA_STREAM="580xx"
         fi
         return 0
     fi
@@ -543,6 +555,12 @@ detect_existing_driver() {
             if [[ -z "$DRIVER_VERSION" ]]; then
                 DRIVER_VERSION=$(rpm -q --qf '%{VERSION}' akmod-nvidia 2>/dev/null)
             fi
+        elif rpm -q akmod-nvidia-580xx &>/dev/null; then
+            DRIVER_INSTALLED=true
+            DRIVER_PACKAGE="akmod-nvidia-580xx"
+            if [[ -z "$DRIVER_VERSION" ]]; then
+                DRIVER_VERSION=$(rpm -q --qf '%{VERSION}' akmod-nvidia-580xx 2>/dev/null)
+            fi
         elif rpm -q akmod-nvidia-470xx &>/dev/null; then
             DRIVER_INSTALLED=true
             DRIVER_PACKAGE="akmod-nvidia-470xx"
@@ -608,18 +626,60 @@ setup_rpmfusion() {
     return 0
 }
 
+# Returns 0 if RPM Fusion offers akmod-nvidia-580xx for this release, else 1.
+# Must run AFTER RPM Fusion repos are enabled so the query can see the package.
+check_580xx_available() {
+    if dnf list --available akmod-nvidia-580xx &>/dev/null \
+        || dnf list --installed akmod-nvidia-580xx &>/dev/null; then
+        NVIDIA_580XX_AVAILABLE=true
+        return 0
+    fi
+    NVIDIA_580XX_AVAILABLE=false
+    return 1
+}
+
+# Console help shown when the 580xx stream is required but RPM Fusion has not
+# yet published it for the running Fedora release. We never fall back to the
+# current (595+) driver here: it dropped Maxwell/Pascal/Volta and would leave
+# the GPU without a working kernel module.
+print_580xx_fallback_help() {
+    local prev=$((DISTRO_VERSION - 1))
+    echo -e "${RED}✗${NC} akmod-nvidia-580xx is not yet in RPM Fusion for Fedora ${DISTRO_VERSION}."
+    echo -e "${YELLOW}⚠${NC}  Maxwell/Pascal/Volta GPUs are dropped by the current (595+) driver,"
+    echo -e "    so installing it would leave this GPU without a working module."
+    echo -e "    Manual workaround — pin 580xx from Fedora ${prev} and lock it:"
+    echo -e "      ${CYAN}sudo dnf install --releasever=${prev} \\\\${NC}"
+    echo -e "      ${CYAN}    akmod-nvidia-580xx xorg-x11-drv-nvidia-580xx-cuda xorg-x11-drv-nvidia-580xx${NC}"
+    echo -e "      ${CYAN}sudo dnf install python3-dnf-plugin-versionlock${NC}"
+    echo -e "      ${CYAN}sudo dnf versionlock add 'akmod-nvidia-580xx' 'xorg-x11-drv-nvidia-580xx*'${NC}"
+    echo -e "    Re-run this installer once 580xx is published for Fedora ${DISTRO_VERSION}."
+}
+
 install_nvidia_fedora() {
     local row=$1
     local col=$2
     local packages
 
-    if [[ "$GPU_IS_LEGACY" == true ]]; then
-        packages=("akmod-nvidia-470xx" "xorg-x11-drv-nvidia-470xx-cuda" "xorg-x11-drv-nvidia-470xx")
-        print_at "$row" "$col" "${CYAN}●${NC} Installing NVIDIA 470xx legacy drivers..."
-    else
-        packages=("akmod-nvidia" "xorg-x11-drv-nvidia-cuda")
-        print_at "$row" "$col" "${CYAN}●${NC} Installing NVIDIA drivers..."
-    fi
+    case "$NVIDIA_STREAM" in
+        470xx)
+            packages=("akmod-nvidia-470xx" "xorg-x11-drv-nvidia-470xx-cuda" "xorg-x11-drv-nvidia-470xx")
+            print_at "$row" "$col" "${CYAN}●${NC} Installing NVIDIA 470xx legacy drivers..."
+            ;;
+        580xx)
+            if ! check_580xx_available; then
+                print_at "$row" "$col" "${RED}✗${NC} akmod-nvidia-580xx not in RPM Fusion for Fedora ${DISTRO_VERSION}     "
+                ((row++))
+                print_at "$row" "$col" "${YELLOW}⚠${NC}  Re-run with -y to see the manual 580xx pin/versionlock steps   "
+                return 1
+            fi
+            packages=("akmod-nvidia-580xx" "xorg-x11-drv-nvidia-580xx-cuda" "xorg-x11-drv-nvidia-580xx")
+            print_at "$row" "$col" "${CYAN}●${NC} Installing NVIDIA 580xx legacy drivers..."
+            ;;
+        *)
+            packages=("akmod-nvidia" "xorg-x11-drv-nvidia-cuda")
+            print_at "$row" "$col" "${CYAN}●${NC} Installing NVIDIA drivers..."
+            ;;
+    esac
 
     if dnf install -y "${packages[@]}" &>/dev/null; then
         print_at "$row" "$col" "${GREEN}✓${NC} NVIDIA drivers installed                  "
@@ -696,13 +756,24 @@ setup_rpmfusion_auto() {
 install_nvidia_fedora_auto() {
     local packages
 
-    if [[ "$GPU_IS_LEGACY" == true ]]; then
-        packages=("akmod-nvidia-470xx" "xorg-x11-drv-nvidia-470xx-cuda" "xorg-x11-drv-nvidia-470xx")
-        echo -e "${CYAN}●${NC} Installing NVIDIA 470xx legacy drivers..."
-    else
-        packages=("akmod-nvidia" "xorg-x11-drv-nvidia-cuda")
-        echo -e "${CYAN}●${NC} Installing NVIDIA drivers..."
-    fi
+    case "$NVIDIA_STREAM" in
+        470xx)
+            packages=("akmod-nvidia-470xx" "xorg-x11-drv-nvidia-470xx-cuda" "xorg-x11-drv-nvidia-470xx")
+            echo -e "${CYAN}●${NC} Installing NVIDIA 470xx legacy drivers..."
+            ;;
+        580xx)
+            if ! check_580xx_available; then
+                print_580xx_fallback_help
+                return 1
+            fi
+            packages=("akmod-nvidia-580xx" "xorg-x11-drv-nvidia-580xx-cuda" "xorg-x11-drv-nvidia-580xx")
+            echo -e "${CYAN}●${NC} Installing NVIDIA 580xx legacy drivers..."
+            ;;
+        *)
+            packages=("akmod-nvidia" "xorg-x11-drv-nvidia-cuda")
+            echo -e "${CYAN}●${NC} Installing NVIDIA drivers..."
+            ;;
+    esac
 
     if dnf install -y "${packages[@]}" &>/dev/null; then
         echo -e "${GREEN}✓${NC} NVIDIA drivers installed"
@@ -745,6 +816,9 @@ install_nvidia_ubuntu() {
     local row=$1
     local col=$2
 
+    # Note: the 580xx/470xx legacy streams are Fedora/RPM-Fusion-only. On Ubuntu,
+    # ubuntu-drivers autoselects the right branch for legacy GPUs, so no
+    # NVIDIA_STREAM handling is needed here.
     print_at "$row" "$col" "${CYAN}●${NC} Updating package lists...                 "
 
     if ! apt update &>/dev/null; then
@@ -937,7 +1011,10 @@ show_system_check_screen() {
             return 1
         fi
         echo -e "${GREEN}✓${NC} GPU: ${GPU_NAME}"
-        [[ "$GPU_IS_LEGACY" == true ]] && echo -e "${YELLOW}⚠${NC}  Legacy GPU detected (470xx drivers)"
+        case "$NVIDIA_STREAM" in
+            470xx) echo -e "${YELLOW}⚠${NC}  Legacy GPU detected (470xx legacy driver stream)" ;;
+            580xx) echo -e "${YELLOW}⚠${NC}  Legacy GPU detected (580xx legacy driver stream)" ;;
+        esac
 
         detect_secure_boot
         [[ "$SECURE_BOOT_ENABLED" == true ]] && echo -e "${YELLOW}⚠${NC}  Secure Boot: ENABLED" || echo -e "${GREEN}✓${NC} Secure Boot: Disabled"
@@ -990,10 +1067,16 @@ show_system_check_screen() {
         local display_name="${GPU_NAME:0:35}"
         print_at "$row" "$col" "${GREEN}✓${NC} GPU: ${WHITE}${display_name}${NC}"
         ((row++))
-        if [[ "$GPU_IS_LEGACY" == true ]]; then
-            print_at "$row" "$col" "${YELLOW}⚠${NC}  Legacy GPU detected (470xx drivers)     "
-            ((row++))
-        fi
+        case "$NVIDIA_STREAM" in
+            470xx)
+                print_at "$row" "$col" "${YELLOW}⚠${NC}  Legacy GPU detected (470xx legacy stream)"
+                ((row++))
+                ;;
+            580xx)
+                print_at "$row" "$col" "${YELLOW}⚠${NC}  Legacy GPU detected (580xx legacy stream)"
+                ((row++))
+                ;;
+        esac
     else
         print_at "$row" "$col" "${RED}✗${NC} No NVIDIA GPU detected                    "
         message_box "Error" "No NVIDIA GPU found in your system" "error" "Press any key to exit..."
@@ -1145,13 +1228,20 @@ show_confirmation_screen() {
         echo -e "${BOLD}Installing:${NC}"
         if [[ "$PACKAGE_MANAGER" == "dnf" ]]; then
             echo -e "  ${GREEN}●${NC} RPM Fusion repositories (if needed)"
-            if [[ "$GPU_IS_LEGACY" == true ]]; then
-                echo -e "  ${GREEN}●${NC} akmod-nvidia-470xx (legacy driver)"
-                echo -e "  ${GREEN}●${NC} xorg-x11-drv-nvidia-470xx-cuda"
-            else
-                echo -e "  ${GREEN}●${NC} akmod-nvidia (latest driver)"
-                echo -e "  ${GREEN}●${NC} xorg-x11-drv-nvidia-cuda"
-            fi
+            case "$NVIDIA_STREAM" in
+                470xx)
+                    echo -e "  ${GREEN}●${NC} akmod-nvidia-470xx (legacy driver)"
+                    echo -e "  ${GREEN}●${NC} xorg-x11-drv-nvidia-470xx-cuda"
+                    ;;
+                580xx)
+                    echo -e "  ${GREEN}●${NC} akmod-nvidia-580xx (legacy driver)"
+                    echo -e "  ${GREEN}●${NC} xorg-x11-drv-nvidia-580xx-cuda"
+                    ;;
+                *)
+                    echo -e "  ${GREEN}●${NC} akmod-nvidia (latest driver)"
+                    echo -e "  ${GREEN}●${NC} xorg-x11-drv-nvidia-cuda"
+                    ;;
+            esac
         else
             echo -e "  ${GREEN}●${NC} ubuntu-drivers-common"
             echo -e "  ${GREEN}●${NC} NVIDIA driver (recommended version)"
@@ -1177,15 +1267,23 @@ show_confirmation_screen() {
     if [[ "$PACKAGE_MANAGER" == "dnf" ]]; then
         print_at "$row" "$col" "  ${GREEN}●${NC} RPM Fusion repositories (if needed)"
         ((row++))
-        if [[ "$GPU_IS_LEGACY" == true ]]; then
-            print_at "$row" "$col" "  ${GREEN}●${NC} akmod-nvidia-470xx (legacy driver)"
-            ((row++))
-            print_at "$row" "$col" "  ${GREEN}●${NC} xorg-x11-drv-nvidia-470xx-cuda"
-        else
-            print_at "$row" "$col" "  ${GREEN}●${NC} akmod-nvidia (latest driver)"
-            ((row++))
-            print_at "$row" "$col" "  ${GREEN}●${NC} xorg-x11-drv-nvidia-cuda"
-        fi
+        case "$NVIDIA_STREAM" in
+            470xx)
+                print_at "$row" "$col" "  ${GREEN}●${NC} akmod-nvidia-470xx (legacy driver)"
+                ((row++))
+                print_at "$row" "$col" "  ${GREEN}●${NC} xorg-x11-drv-nvidia-470xx-cuda"
+                ;;
+            580xx)
+                print_at "$row" "$col" "  ${GREEN}●${NC} akmod-nvidia-580xx (legacy driver)"
+                ((row++))
+                print_at "$row" "$col" "  ${GREEN}●${NC} xorg-x11-drv-nvidia-580xx-cuda"
+                ;;
+            *)
+                print_at "$row" "$col" "  ${GREEN}●${NC} akmod-nvidia (latest driver)"
+                ((row++))
+                print_at "$row" "$col" "  ${GREEN}●${NC} xorg-x11-drv-nvidia-cuda"
+                ;;
+        esac
     else
         print_at "$row" "$col" "  ${GREEN}●${NC} ubuntu-drivers-common"
         ((row++))

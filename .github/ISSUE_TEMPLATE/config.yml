@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/iamteedoh/nvidiaInstaller/security/advisories/new
+    about: Please report security issues privately — see SECURITY.md. Do not open a public issue.
+  - name: Question / usage help
+    url: https://github.com/iamteedoh/nvidiaInstaller/discussions
+    about: For "how do I…" questions, use Discussions rather than a bug report.

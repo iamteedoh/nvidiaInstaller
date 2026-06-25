@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a new capability — new GPU/driver-stream support, a distro, a flag, a UX improvement.
+title: "[Feature]: "
+labels: ["type:feature", "status:to-do"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! If this is about supporting a specific GPU or driver branch, please include the GPU details so the request is actionable.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this isn't already requested.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The use case or pain point, not just the proposed solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: Relevant GPU / driver branch (if applicable)
+      description: e.g. "Maxwell GTX 980 — needs 580xx", or output of `lspci -nn | grep -i nvidia`.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

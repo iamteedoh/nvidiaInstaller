@@ -2,38 +2,43 @@
 
 ## Reporting a vulnerability
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+**Do not report security vulnerabilities through public GitHub issues.**
 
-This project installs proprietary drivers as root and modifies system
-configuration, so security reports are taken seriously. Report privately via one
-of:
+Use GitHub's private vulnerability reporting instead:
 
-- **GitHub Security Advisories** (preferred): open a private report at
-  <https://github.com/iamteedoh/nvidiaInstaller/security/advisories/new>.
-- **Email**: gvalentin04@gmail.com with `[SECURITY] nvidiaInstaller` in the subject.
+1. Open the repository's **Security** tab.
+2. Select **Report a vulnerability**.
+3. Provide the details requested below.
 
-Please include:
+If private reporting is unavailable, contact the maintainer through the
+[iamteedoh GitHub profile](https://github.com/iamteedoh).
 
-- The version / commit you tested.
-- A description of the issue and its impact (e.g. privilege escalation,
-  arbitrary command execution, untrusted download).
-- Steps to reproduce, and a proof of concept if you have one.
+## What to include
 
-## What to expect
+- A description of the issue and its potential impact (e.g. privilege
+  escalation, arbitrary command execution, untrusted download)
+- Reproduction steps or a minimal proof of concept
+- The affected release, commit, distro, and GPU/driver stream
+- A suggested remediation, if known
 
-- An acknowledgement within a few days.
-- An assessment and, if confirmed, a fix coordinated with you before public
-  disclosure.
-- Credit in the release notes if you'd like it.
+Never include passwords, private hostnames, or unredacted logs in a report.
 
-## Scope
+## Security-sensitive areas
 
-Because this is an installer that runs with elevated privileges, the areas of
-highest interest are: the package sources it trusts (RPM Fusion repos, release
-RPMs, download URLs), anything executed as root, and any path where untrusted
-input could influence a command. Reports in these areas are especially welcome.
+nvidiaInstaller runs as root and modifies system configuration, so the most
+sensitive surfaces are:
+
+- The package sources it trusts: the RPM Fusion release RPMs it installs
+  (fetched over HTTPS with `--nogpgcheck`), the RPM Fusion driver packages,
+  and the driver `ubuntu-drivers` recommends
+- Everything executed as root: `dnf`/`apt` installs, `dracut --force`,
+  `update-initramfs -u`, and `reboot`
+- Any path where untrusted input (`lspci` output, `/etc/os-release`,
+  package-manager output) could influence a command
+- Boot-critical changes: `/etc/dracut.conf.d/nvidia.conf`, initramfs
+  regeneration, and the Secure Boot / MOK enrollment guidance
 
 ## Supported versions
 
-Fixes are made against the latest `main`. There is no long-term support branch;
-please test against `main` before reporting.
+Security fixes land on `main` and ship in the next tagged source release. Test
+against the latest release or `main` before reporting an issue.

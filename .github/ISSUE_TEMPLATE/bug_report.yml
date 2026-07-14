@@ -7,6 +7,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to file a bug. The more detail you give about your **GPU** and **distro**, the faster this gets fixed — driver selection is GPU-architecture-specific.
+        Do not paste tokens, passwords, or private host details.
   - type: checkboxes
     id: preflight
     attributes:

@@ -7,7 +7,7 @@ A beautiful terminal user interface for installing NVIDIA proprietary drivers on
 ## Features
 
 ### Core Functionality
-- Automatic GPU detection (including legacy Kepler GPUs for 470xx drivers)
+- Automatic GPU detection with driver-stream selection: current, 580xx legacy (Maxwell/Pascal/Volta), 470xx legacy (Kepler)
 - Secure Boot detection with detailed MOK enrollment guidance
 - LUKS encryption detection with automatic initramfs/dracut configuration
 - Idempotent - detects existing installations and skips unless forced
@@ -52,7 +52,7 @@ The installer automatically detects and handles:
 | Detection | Method | Action |
 |-----------|--------|--------|
 | **Distribution** | `/etc/os-release` | Selects DNF or APT package manager |
-| **NVIDIA GPU** | `lspci` | Identifies GPU model, detects legacy Kepler GPUs |
+| **NVIDIA GPU** | `lspci -nn` | Identifies GPU model, selects the driver stream (current / 580xx / 470xx) from the chip codename |
 | **Existing drivers** | `nvidia-smi`, `modinfo`, package manager | Offers reinstall option or skips |
 | **Secure Boot** | `mokutil --sb-state` | Shows detailed MOK enrollment instructions |
 | **LUKS encryption** | `lsblk -f` | Configures initramfs with NVIDIA modules |
@@ -162,10 +162,16 @@ sudo ./nvidia-installer.sh -y -f --no-reboot
 ### Fedora / RPM-based Systems
 
 1. **RPM Fusion repositories** (Free and Non-Free) - if not already enabled
-2. **Driver packages:**
-   - Modern GPUs (Maxwell 2014+ / GTX 900+): `akmod-nvidia`, `xorg-x11-drv-nvidia-cuda`
-   - Legacy GPUs (Kepler / GTX 600-700): `akmod-nvidia-470xx`, `xorg-x11-drv-nvidia-470xx-cuda`
+2. **Driver packages** (by GPU architecture):
+   - Modern GPUs (Turing / RTX 2000 and newer): `akmod-nvidia`, `xorg-x11-drv-nvidia-cuda`
+   - Legacy Maxwell / Pascal / Volta (GTX 900-1000 series): `akmod-nvidia-580xx`, `xorg-x11-drv-nvidia-580xx-cuda`, `xorg-x11-drv-nvidia-580xx`
+   - Legacy Kepler (GTX 600-700 series): `akmod-nvidia-470xx`, `xorg-x11-drv-nvidia-470xx-cuda`, `xorg-x11-drv-nvidia-470xx`
 3. **Dracut configuration** - if LUKS encryption is detected
+
+> **Note:** If RPM Fusion has not yet published the 580xx packages for your
+> Fedora release, the installer stops and prints manual pin/versionlock steps
+> instead of falling back to the current driver, which dropped
+> Maxwell/Pascal/Volta support.
 
 ### Ubuntu / DEB-based Systems
 
@@ -381,6 +387,17 @@ sudo apt purge '*nvidia*'
 sudo update-initramfs -u
 ```
 
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
+issue workflow, validation commands, and PR process. Bug reports should
+include the output of `lspci -nn | grep -i nvidia`.
+
+## Security
+
+This tool runs as root and modifies system configuration. Report
+vulnerabilities privately per [SECURITY.md](SECURITY.md), not in public issues.
+
 ## License
 
-GNU General Public License v3.0
+GNU General Public License v3.0 — see [LICENSE](LICENSE).

@@ -1,0 +1,8 @@
+## Author: Tito Valentin
+## Name of Program: nvidiaInstaller Gitleaks Configuration
+## Date Created: 2026-07-13
+## Description: Extends the default Gitleaks rules for repository history scans.
+title = "nvidiaInstaller gitleaks configuration"
+
+[extend]
+useDefault = true

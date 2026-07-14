@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
 # NVIDIA Driver Installer TUI
 # A beautiful terminal interface for installing NVIDIA drivers

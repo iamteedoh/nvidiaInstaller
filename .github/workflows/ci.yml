@@ -1,0 +1,108 @@
+---
+## Author: Tito Valentin
+## Name of Program: nvidiaInstaller Continuous Integration
+## Date Created: 2026-07-13
+## Description: Validates source quality, secrets, and OSS release requirements.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test:
+    name: Lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Shellcheck
+        run: git ls-files '*.sh' | xargs shellcheck --severity=error
+
+      - name: Bash syntax check
+        run: git ls-files '*.sh' | xargs -n1 bash -n
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLo "/tmp/${archive}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  /tmp/${archive}" | sha256sum --check
+          tar -xzf "/tmp/${archive}" -C /tmp gitleaks
+
+      - name: Scan the full Git history
+        run: /tmp/gitleaks git . --config .gitleaks.toml --redact --no-banner
+
+  community-files:
+    name: OSS community & licensing files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Require community health and licensing files
+        shell: bash
+        run: |
+          fail=0
+          require() {
+            if [ ! -s "$1" ]; then
+              echo "::error::missing or empty: $1"
+              fail=1
+            fi
+          }
+
+          require LICENSE
+          require README.md
+          require CONTRIBUTING.md
+          require CODE_OF_CONDUCT.md
+          require SECURITY.md
+          require CHANGELOG.md
+          require .github/FUNDING.yml
+          require .github/pull_request_template.md
+          require .github/ISSUE_TEMPLATE/bug_report.yml
+          require .github/ISSUE_TEMPLATE/feature_request.yml
+
+          if ! grep -q "GNU GENERAL PUBLIC LICENSE" LICENSE \
+            || ! grep -q "Version 3" LICENSE; then
+            echo "::error::LICENSE is not GNU GPL v3"
+            fail=1
+          fi
+
+          if ! grep -qE '^\s*(github|patreon|open_collective|ko_fi|buy_me_a_coffee|liberapay|custom):' \
+            .github/FUNDING.yml; then
+            echo "::error::.github/FUNDING.yml has no sponsor or payment link"
+            fail=1
+          fi
+
+          while IFS= read -r file; do
+            if ! head -n 8 "$file" | grep -q 'SPDX-License-Identifier: GPL-3.0-or-later'; then
+              echo "::error file=${file}::missing GPL-3.0-or-later SPDX header"
+              fail=1
+            fi
+          done < <(git ls-files '*.sh')
+
+          [ "$fail" -eq 0 ] || exit 1
+          echo "All required OSS community and licensing checks passed."

@@ -1,0 +1,27 @@
+---
+## Author: Tito Valentin
+## Name of Program: nvidiaInstaller Release Automation
+## Date Created: 2026-07-13
+## Description: Creates source-only releases from Conventional Commit history.
+name: release-please
+
+# nvidiaInstaller is distributed as source. Merging the generated release PR
+# updates the changelog and version marker, creates a vX.Y.Z tag, and publishes
+# a GitHub Release. There is intentionally no binary build or artifact upload.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

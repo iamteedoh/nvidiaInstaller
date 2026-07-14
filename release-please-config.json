@@ -7,5 +7,6 @@
     ".": {
       "package-name": "nvidiaInstaller"
     }
-  }
+  },
+  "include-component-in-tag": false
 }

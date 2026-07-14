@@ -1,6 +1,10 @@
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/iamteedoh) [![Patreon](https://img.shields.io/badge/Support-Patreon-f96854?logo=patreon)](https://patreon.com/iamteedoh) [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/iamteedoh)
-
 # NVIDIA Driver Installer TUI
+
+[![CI](https://github.com/iamteedoh/nvidiaInstaller/actions/workflows/ci.yml/badge.svg)](https://github.com/iamteedoh/nvidiaInstaller/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-%E2%9D%A4-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/iamteedoh)
+[![Patreon](https://img.shields.io/badge/Patreon-support-f96854?logo=patreon)](https://patreon.com/iamteedoh)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/iamteedoh)
 
 A beautiful terminal user interface for installing NVIDIA proprietary drivers on Linux systems.
 
